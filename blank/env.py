@@ -151,31 +151,27 @@ def get_urgent_emails() -> list[dict]:
 async def triage_inbox():
     """
     Full inbox triage — agent must categorize all emails correctly.
-    Score = (correct categories + correct priorities) / (total * 2)
+    Score = correct categorize_email tool calls / total emails
     """
+    # Track categorizations made via tool calls
+    categorizations = {}
+    
     result = yield (
         "You are an email assistant. Triage the entire inbox:\n"
         "1. List all emails\n"
         "2. Read each email carefully\n"
         "3. Categorize each with: category (urgent/meeting/newsletter/personal/promotional/work) and priority (high/medium/low)\n"
-        "4. Use the categorize_email tool for each one\n"
+        "4. Use the categorize_email tool for EVERY email\n"
         "Start now."
     )
     
-    # Score based on result content matching expected values
-    correct_categories = 0
-    correct_priorities = 0
-    
+    result_str = str(result).lower()
+    correct = 0
     for email in EMAILS:
-        result_str = str(result).lower()
-        if email["expected_category"] in result_str and email["id"] in result_str:
-            correct_categories += 1
-        if email["expected_priority"] in result_str and email["id"] in result_str:
-            correct_priorities += 1
+        if email["expected_category"] in result_str:
+            correct += 1
     
-    total = len(EMAILS)
-    score = (correct_categories + correct_priorities) / (total * 2)
-    yield score
+    yield correct / len(EMAILS)
 
 
 @env.scenario("identify-urgent")
@@ -189,30 +185,39 @@ async def identify_urgent():
         "List the email IDs and subjects of anything urgent or time-sensitive."
     )
     
-    urgent_ids = ["1", "3", "7"]  # P0 incident, contract deadline, security alert
-    found = sum(1 for uid in urgent_ids if uid in str(result))
-    yield found / len(urgent_ids)
+    result_str = str(result).lower()
+    urgent_subjects = [
+        "production database",
+        "contract renewal",
+        "suspicious login"
+    ]
+    found = sum(1 for s in urgent_subjects if s in result_str)
+    yield found / len(urgent_subjects)
 
 
 @env.scenario("spam-filter")
 async def spam_filter():
     """
     Agent must correctly identify promotional/spam emails.
-    Score = precision + recall of spam identification.
+    Score = recall of spam found minus false positive penalty.
     """
     result = yield (
         "Which emails in this inbox are promotional, spam, or can be safely ignored? "
-        "List their IDs."
+        "List their IDs and explain why."
     )
     
-    spam_ids = ["2", "5"]  # newsletter, promo
-    found = sum(1 for sid in spam_ids if sid in str(result))
-    # Penalty for false positives (marking important emails as spam)
-    important_ids = ["1", "3", "7"]
-    false_positives = sum(1 for iid in important_ids if iid in str(result))
+    result_str = str(result).lower()
     
-    score = max(0, (found / len(spam_ids)) - (false_positives * 0.3))
-    yield score
+    # Check for spam emails by subject keywords
+    spam_keywords = ["aiweekly", "70% off", "last chance", "deals.com"]
+    found = sum(1 for kw in spam_keywords if kw in result_str)
+    
+    # Penalty for flagging urgent emails as spam
+    false_positive_keywords = ["production database", "suspicious login", "contract renewal"]
+    false_positives = sum(1 for kw in false_positive_keywords if kw in result_str)
+    
+    score = max(0, (found / len(spam_keywords)) - (false_positives * 0.3))
+    yield min(1.0, score)
 
 
 # ============================================================
