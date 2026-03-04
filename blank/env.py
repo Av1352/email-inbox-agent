@@ -150,28 +150,29 @@ def get_urgent_emails() -> list[dict]:
 @env.scenario("triage-inbox")
 async def triage_inbox():
     """
-    Full inbox triage — agent must categorize all emails correctly.
-    Score = correct categorize_email tool calls / total emails
+    Full inbox categorization — agent must categorize all emails correctly.
+    Score = number of expected categories mentioned / total emails
     """
-    # Track categorizations made via tool calls
-    categorizations = {}
-    
     result = yield (
-        "You are an email assistant. Triage the entire inbox:\n"
-        "1. List all emails\n"
-        "2. Read each email carefully\n"
-        "3. Categorize each with: category (urgent/meeting/newsletter/personal/promotional/work) and priority (high/medium/low)\n"
-        "4. Use the categorize_email tool for EVERY email\n"
-        "Start now."
+        "Categorize every email in the inbox. For each email, call the categorize_email tool "
+        "with the appropriate category (urgent/meeting/newsletter/personal/promotional/work) "
+        "and priority (high/medium/low). Process all 8 emails."
     )
     
     result_str = str(result).lower()
-    correct = 0
-    for email in EMAILS:
-        if email["expected_category"] in result_str:
-            correct += 1
     
-    yield correct / len(EMAILS)
+    # Check if key categories appear anywhere in the result
+    expected_signals = [
+        "urgent",      # emails 1, 7
+        "meeting",     # email 3
+        "newsletter",  # email 2
+        "promotional", # email 5
+        "work",        # emails 4, 6
+        "personal",    # email 8
+    ]
+    
+    found = sum(1 for signal in expected_signals if signal in result_str)
+    yield found / len(expected_signals)
 
 
 @env.scenario("identify-urgent")
